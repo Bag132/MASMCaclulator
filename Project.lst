@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler Version 14.40.33813.0	    08/08/24 12:49:22
+Microsoft (R) Macro Assembler Version 14.40.33813.0	    08/11/24 02:55:03
 1Add and Subtract, Version 2         (AddSub2.asm	     Page 1 - 1
 
 
@@ -52,58 +52,230 @@ Microsoft (R) Macro Assembler Version 14.40.33813.0	    08/08/24 12:49:22
 	   6D 62 65 72 3A
 	   20 00
 
-				; Operations
- 00000064 2B			OpAddition DB '+'
- 00000065 2D			OpSubtraction DB '-'
- 00000066 2A			OpMultiplication DB '*'
- 00000067 2F			OpDivision DB '/'
- 00000068 5E			OpExponent DB '^'
+ 00000064 53 65 6C 65 63	OperationInvalidError DB 'Selected operation is invalid: ', 0
+	   74 65 64 20 6F
+	   70 65 72 61 74
+	   69 6F 6E 20 69
+	   73 20 69 6E 76
+	   61 6C 69 64 3A
+	   20 00
+ 00000084 43 61 6E 6E 6F	DivideZeroError DB 'Cannot divide by zero.', 13, 10, 13, 10, 0
+	   74 20 64 69 76
+	   69 64 65 20 62
+	   79 20 7A 65 72
+	   6F 2E 0D 0A 0D
+	   0A 00
+ 0000009F 49 6E 74 65 67	OverflowError DB 'Integer overflow.', 13, 10, 13, 10, 0
+	   65 72 20 6F 76
+	   65 72 66 6C 6F
+	   77 2E 0D 0A 0D
+	   0A 00
 
- 00000069 00			Operation BYTE 0
- 0000006A 00000000		NumOne DWORD 0
- 0000006E 00000000		NUMTwo DWORD 0
+ = 00000078			MEMORY_LENGTH EQU 4 * 30
+ 000000B5  00000078 [		CalcMemory DWORD MEMORY_LENGTH DUP(0)
+	    00000000
+	   ]
+ 00000295 00000000		MemIndex DWORD 0
+
+				; Operations
+ 00000299 2B			OpAddition DB '+'
+ 0000029A 2D			OpSubtraction DB '-'
+ 0000029B 2A			OpMultiplication DB '*'
+ 0000029C 2F			OpDivision DB '/'
+ 0000029D 5E			OpExponent DB '^'
+ 0000029E 20			CharSpace BYTE ' '
+ 0000029F 3D			CharEqual BYTE '='
+
+ 000002A0 00			Operation BYTE 0
+ 000002A1 00000000		NumOne DWORD 0
+ 000002A5 00000000		NUMTwo DWORD 0
+ 000002A9 00000000		Result DWORD 0
 
  00000000			.code
+				; Only prints sign if negative
+ 00000000			PrintInt PROC USES EAX,
+					X:DWORD
 
- 00000000			AddNum PROC
- 00000000				X:DWORD, Y:DWORD
-main.asm(30) : error A2008:syntax error : dword
- 00000000  55				PUSH EBP
- 00000001  8B EC			MOV EBP, ESP
+ 00000000  55		   *	    push   ebp
+ 00000001  8B EC	   *	    mov    ebp, esp
+ 00000003  50		   *	    push   eax
+ 00000004  8B 45 08			MOV EAX, X
 
- 00000003  8B 45 0C			MOV EAX, [EBP + 12]
- 00000006  03 45 08			ADD EAX, [EBP + 8]
+ 00000007  83 7D 08 00			CMP X, 0
+ 0000000B  7C 07			JL PrintSigned
 
- 00000009  5D				POP EBP
- 0000000A			AddNum ENDP
+ 0000000D			PrintUnsigned:
+ 0000000D  E8 00000000 E		CALL WriteDec
+ 00000012  EB 05			JMP EndPrint
+ 00000014			PrintSigned:
+ 00000014  E8 00000000 E		CALL WriteInt
+ 00000019			EndPrint:
 
- 0000000A			SubtractNum PROC
- 0000000A				X:DWORD, Y:DWORD
-main.asm(41) : error A2008:syntax error : dword
- 0000000A  55				PUSH EBP
- 0000000B  8B EC			MOV EBP, ESP
+					RET
+ 00000019  58		   *	    pop    eax
+ 0000001A  C9		   *	    leave  
+ 0000001B  C2 0004	   *	    ret    00004h
+ 0000001E			PrintInt ENDP
 
- 0000000D  5D				POP EBP
- 0000000E			SubtractNum ENDP
 
- 0000000E			MultiplyNum PROC
- 0000000E  55				PUSH EBP
- 0000000F  8B EC			MOV EBP, ESP
+ 0000001E			PrintChar PROC,
+					X:BYTE
 
- 00000011  5D				POP EBP
- 00000012			MultiplyNum ENDP
+ 0000001E  55		   *	    push   ebp
+ 0000001F  8B EC	   *	    mov    ebp, esp
+ 00000021  60				PUSHAD
+ 00000022  8A 45 08			MOV AL, X
+ 00000025  E8 00000000 E		CALL WriteChar
+ 0000002A  61				POPAD
 
- 00000012			DivideNum PROC
- 00000012			DivideNum ENDP
+					RET
+ 0000002B  C9		   *	    leave  
+ 0000002C  C2 0004	   *	    ret    00004h
+ 0000002F			PrintChar ENDP
 
- 00000012			main PROC
+
+				; Add numbers, store in EAX
+ 0000002F			AddNum PROC
+ 0000002F  55				PUSH EBP
+ 00000030  8B EC			MOV EBP, ESP
+
+ 00000032  8B 5D 0C			MOV EBX, [EBP + 12]
+ 00000035  03 5D 08			ADD EBX, [EBP + 8]
+
+ 00000038  70 02			JO AdditionOverflow
+ 0000003A  EB 0A			JMP ReturnAddition
+
+ 0000003C			AdditionOverflow:
+ 0000003C  BA 0000009F R		MOV EDX, OFFSET OverflowError
+ 00000041  E8 00000000 E		CALL WriteString
+
+ 00000046			ReturnAddition:
+ 00000046  5D				POP EBP
+ 00000047  8B C3			MOV EAX, EBX
+ 00000049  C3				RET
+ 0000004A			AddNum ENDP
+
+
+				; Subtract numbers, store in EAX
+ 0000004A			SubtractNum PROC,
+					X:DWORD, Y:DWORD
+
+ 0000004A  55		   *	    push   ebp
+ 0000004B  8B EC	   *	    mov    ebp, esp
+ 0000004D  8B 5D 08			MOV EBX, X
+ 00000050  2B 5D 0C			SUB EBX, Y
+
+ 00000053  70 02			JO SubtractionOverflow
+ 00000055  EB 0A			JMP ReturnSubtraction
+
+ 00000057			SubtractionOverflow:
+ 00000057  BA 0000009F R		MOV EDX, OFFSET OverflowError
+ 0000005C  E8 00000000 E		CALL WriteString
+ 00000061			ReturnSubtraction:
+
+ 00000061  8B C3			MOV EAX, EBX
+					RET
+ 00000063  C9		   *	    leave  
+ 00000064  C2 0008	   *	    ret    00008h
+ 00000067			SubtractNum ENDP
+
+
+				; Multiply numbers, store in EAX
+ 00000067			MultiplyNum PROC,
+					X:DWORD, Y:DWORD
+
+ 00000067  55		   *	    push   ebp
+ 00000068  8B EC	   *	    mov    ebp, esp
+ 0000006A  8B 45 08			MOV EAX, X
+ 0000006D  99				CDQ
+ 0000006E  0F AF 45 0C			IMUL EAX, Y
+
+ 00000072  70 02			JO MultiplicationOverflow
+ 00000074  EB 0E			JMP ReturnMultiplication
+
+ 00000076			MultiplicationOverflow:
+ 00000076  8B C8			MOV ECX, EAX
+ 00000078  BA 0000009F R		MOV EDX, OFFSET OverflowError
+ 0000007D  E8 00000000 E		CALL WriteString
+ 00000082  8B C1			MOV EAX, ECX
+					
+ 00000084			ReturnMultiplication:
+					RET
+ 00000084  C9		   *	    leave  
+ 00000085  C2 0008	   *	    ret    00008h
+
+ 00000088			MultiplyNum ENDP
+
+
+				; Divide numbers, store in EAX
+ 00000088			DivideNum PROC,
+					X:DWORD, Y:DWORD
+					
+ 00000088  55		   *	    push   ebp
+ 00000089  8B EC	   *	    mov    ebp, esp
+ 0000008B  8B 45 08			MOV EAX, X
+
+ 0000008E  99				CDQ	; reduce probablity of overflow
+ 0000008F  83 7D 0C 00			CMP Y, 0; Checks for Zero
+ 00000093  74 05			JE ZeroDivision
+
+ 00000095  F7 7D 0C			IDIV Y
+
+ 00000098  EB 0E			JMP ReturnSubtraction ; No Zero
+
+					;If the User divides by 0
+ 0000009A			ZeroDivision:
+ 0000009A  8B C8			MOV ECX, EAX
+ 0000009C  BA 00000084 R		MOV EDX, OFFSET DivideZeroError
+ 000000A1  E8 00000000 E		CALL WriteString
+ 000000A6  8B C1			MOV EAX, ECX
+
+ 000000A8			ReturnSubtraction:
+					RET
+ 000000A8  C9		   *	    leave  
+ 000000A9  C2 0008	   *	    ret    00008h
+ 000000AC			DivideNum ENDP
+
+
+				; Multiply numbers, store in EAX
+ 000000AC			ExponentNum PROC,
+					X:DWORD, Y:DWORD
+
+ 000000AC  55		   *	    push   ebp
+ 000000AD  8B EC	   *	    mov    ebp, esp
+ 000000AF  B8 00000001			MOV EAX, 1
+ 000000B4  8B 4D 0C			MOV ECX, Y
+
+ 000000B7			LoopExp:
+ 000000B7  0F AF 45 08			IMUL EAX, X
+ 000000BB  70 04			JO ExponentOverflow	
+					;CALL DumpRegs
+ 000000BD  E2 F8			LOOP LoopExp
+
+ 000000BF  EB 0E			JMP ReturnExponent
+
+ 000000C1			ExponentOverflow:
+ 000000C1  8B D8			MOV EBX, EAX
+ 000000C3  BA 0000009F R		MOV EDX, OFFSET OverflowError
+ 000000C8  E8 00000000 E		CALL WriteInt
+ 000000CD  8B C3			MOV EAX, EBX
+
+ 000000CF			ReturnExponent:
+					RET
+ 000000CF  C9		   *	    leave  
+ 000000D0  C2 0008	   *	    ret    00008h
+ 000000D3			ExponentNum ENDP
+
+
+ 000000D3			main PROC
 					; Ask for desired operation
- 00000012  BA 00000003 R		MOV EDX, OFFSET PromptOperation
- 00000017  E8 00000000 E		CALL WriteString
+ 000000D3			ProgramStart:
+ 000000D3  BA 00000003 R		MOV EDX, OFFSET PromptOperation
+ 000000D8  E8 00000000 E		CALL WriteString
 
 					; Read operation character from user
- 0000001C  E8 00000000 E		CALL ReadChar
- 00000021  A2 00000069 R		MOV Operation, AL
+ 000000DD  E8 00000000 E		CALL ReadChar
+ 000000E2  A2 000002A0 R		MOV Operation, AL
 
 					; (Debug) Print out selected operation number
 					;MOVZX EAX, Operation
@@ -112,82 +284,163 @@ main.asm(41) : error A2008:syntax error : dword
 					;CALL WriteString
 
 					; Ask for desired first number
- 00000026  BA 00000039 R		MOV EDX, OFFSET PromptNumOne
- 0000002B  E8 00000000 E		CALL WriteString
+ 000000E7  BA 00000039 R		MOV EDX, OFFSET PromptNumOne
+ 000000EC  E8 00000000 E		CALL WriteString
 					
 					; Read first number from user
- 00000030  E8 00000000 E		CALL ReadInt
- 00000035  A3 0000006A R		MOV NumOne, EAX
+ 000000F1  E8 00000000 E		CALL ReadInt
+ 000000F6  A3 000002A1 R		MOV NumOne, EAX
 					
 					; (Debug) Print NumOne
 					; CALL WriteInt
 					
 					; Ask for desired second number
- 0000003A  BA 0000004E R		MOV EDX, OFFSET PromptNumTwo
- 0000003F  E8 00000000 E		CALL WriteString
+ 000000FB  BA 0000004E R		MOV EDX, OFFSET PromptNumTwo
+ 00000100  E8 00000000 E		CALL WriteString
 					
 					; Read second number from user
- 00000044  E8 00000000 E		CALL ReadInt
- 00000049  A3 0000006E R		MOV NumTwo, EAX
+ 00000105  E8 00000000 E		CALL ReadInt
+ 0000010A  A3 000002A5 R		MOV NumTwo, EAX
 
 					; (Debug) Print NumTwo
 					;CALL WriteInt
 
 					; Comparison for operation jump
 					
- 0000004E  A0 00000069 R		MOV AL, Operation
+ 0000010F  A0 000002A0 R		MOV AL, Operation
 
 					; Determine which operation was selected and jump to the correct label
- 00000053  3A 05 00000064 R		CMP AL, OpAddition
- 00000059  74 22			JE SelectedAddition
+ 00000114  3A 05 00000299 R		CMP AL, OpAddition
+ 0000011A  74 43			JE SelectedAddition
 
- 0000005B  3A 05 00000065 R		CMP AL, OpSubtraction
- 00000061  74 2D			JE SelectedSubtraction
+ 0000011C  3A 05 0000029A R		CMP AL, OpSubtraction
+ 00000122  74 4E			JE SelectedSubtraction
 
- 00000063  3A 05 00000066 R		CMP AL, OpMultiplication
- 00000069  74 2C			JE SelectedMultiplication
+ 00000124  3A 05 0000029B R		CMP AL, OpMultiplication
+ 0000012A  74 59			JE SelectedMultiplication
 
- 0000006B  3A 05 00000067 R		CMP AL, OpDivision
- 00000071  74 2B			JE SelectedDivision
+ 0000012C  3A 05 0000029C R		CMP AL, OpDivision
+ 00000132  74 64			JE SelectedDivision
 
- 00000073  3A 05 00000068 R		CMP AL, OpExponent
- 00000079  74 2A			JE SelectedExponent
+ 00000134  3A 05 0000029D R		CMP AL, OpExponent
+ 0000013A  74 6F			JE SelectedExponent
 
- 0000007B  EB 28			JMP EndSelected ; TODO, HANDLE USER ERROR: Operation invalid
+ 0000013C  BA 00000064 R		MOV EDX, OFFSET OperationInvalidError
+ 00000141  E8 00000000 E		CALL WriteString
+ 00000146  A0 000002A0 R		MOV AL, Operation
+ 0000014B  E8 00000000 E		CALL WriteChar
+ 00000150  E8 00000000 E		CALL Crlf
+ 00000155  E8 00000000 E		CALL Crlf
+ 0000015A  E9 FFFFFF74			JMP ProgramStart ; HANDLE USER ERROR: Operation invalid
 
- 0000007D			SelectedAddition:
- 0000007D  FF 35 0000006A R		PUSH NumOne
- 00000083  FF 35 0000006E R		PUSH NumTwo
+ 0000015F			SelectedAddition:
+ 0000015F  FF 35 000002A1 R		PUSH NumOne
+ 00000165  FF 35 000002A5 R		PUSH NumTwo
 
- 00000089  E8 FFFFFF72			CALL AddNum
+ 0000016B  E8 FFFFFEBF			CALL AddNum
 
- 0000008E  EB 15			JMP EndSelected
- 00000090			SelectedSubtraction:
+ 00000170  EB 4A			JMP EndSelected
+ 00000172			SelectedSubtraction:
 					INVOKE SubtractNum, NumOne, NumTwo
-main.asm(125) : error A2136:too many arguments to INVOKE
- 00000090  E8 FFFFFF75	   *	    call   SubtractNum
- 00000095  EB 0E			JMP EndSelected
- 00000097			SelectedMultiplication:
+ 00000172  FF 35 000002A5 R *	    push   NUMTwo
+ 00000178  FF 35 000002A1 R *	    push   NumOne
+ 0000017E  E8 FFFFFEC7	   *	    call   SubtractNum
+ 00000183  EB 37			JMP EndSelected
+ 00000185			SelectedMultiplication:
 					INVOKE MultiplyNum, NumOne, NumTwo
-main.asm(128) : error A2136:too many arguments to INVOKE
- 00000097  E8 FFFFFF72	   *	    call   MultiplyNum
- 0000009C  EB 07			JMP EndSelected
- 0000009E			SelectedDivision:
+ 00000185  FF 35 000002A5 R *	    push   NUMTwo
+ 0000018B  FF 35 000002A1 R *	    push   NumOne
+ 00000191  E8 FFFFFED1	   *	    call   MultiplyNum
+ 00000196  EB 24			JMP EndSelected
+ 00000198			SelectedDivision:
 					INVOKE DivideNum, NumOne, NumTwo
-main.asm(131) : error A2136:too many arguments to INVOKE
- 0000009E  E8 FFFFFF6F	   *	    call   DivideNum
- 000000A3  EB 00			JMP EndSelected
- 000000A5			SelectedExponent:
+ 00000198  FF 35 000002A5 R *	    push   NUMTwo
+ 0000019E  FF 35 000002A1 R *	    push   NumOne
+ 000001A4  E8 FFFFFEDF	   *	    call   DivideNum
+ 000001A9  EB 11			JMP EndSelected
+ 000001AB			SelectedExponent:
 					INVOKE ExponentNum, NumOne, NumTwo
-main.asm(134) : error A2006:undefined symbol : ExponentNum
- 000000A5			EndSelected:
+ 000001AB  FF 35 000002A5 R *	    push   NUMTwo
+ 000001B1  FF 35 000002A1 R *	    push   NumOne
+ 000001B7  E8 FFFFFEF0	   *	    call   ExponentNum
+					
+ 000001BC			EndSelected:
+					; Store result in Result
+ 000001BC  A3 000002A9 R		MOV Result, EAX
+
+					; Store calculation memory
+ 000001C1  8B 1D 00000295 R		MOV EBX, MemIndex
+
+ 000001C7  89 04 9D			MOV [CalcMemory + EBX * DWORD], EAX
+	   000000B5 R
+
+ 000001CE  43				INC EBX
+ 000001CF  89 1D 00000295 R		MOV MemIndex, EBX
+
+					; Print calculation
+					INVOKE PrintInt, NumOne
+ 000001D5  FF 35 000002A1 R *	    push   NumOne
+ 000001DB  E8 FFFFFE20	   *	    call   PrintInt
+					INVOKE PrintChar, CharSpace
+ 000001E0  A0 0000029E R   *	    mov    al, CharSpace
+ 000001E5  50		   *	    push   eax
+ 000001E6  E8 FFFFFE33	   *	    call   PrintChar
+					INVOKE PrintChar, Operation
+ 000001EB  A0 000002A0 R   *	    mov    al, Operation
+ 000001F0  50		   *	    push   eax
+ 000001F1  E8 FFFFFE28	   *	    call   PrintChar
+					INVOKE PrintChar, CharSpace
+ 000001F6  A0 0000029E R   *	    mov    al, CharSpace
+ 000001FB  50		   *	    push   eax
+ 000001FC  E8 FFFFFE1D	   *	    call   PrintChar
+					INVOKE PrintInt, NumTwo
+ 00000201  FF 35 000002A5 R *	    push   NUMTwo
+ 00000207  E8 FFFFFDF4	   *	    call   PrintInt
+					INVOKE PrintChar, CharSpace
+ 0000020C  A0 0000029E R   *	    mov    al, CharSpace
+ 00000211  50		   *	    push   eax
+ 00000212  E8 FFFFFE07	   *	    call   PrintChar
+					INVOKE PrintChar, CharEqual
+ 00000217  A0 0000029F R   *	    mov    al, CharEqual
+ 0000021C  50		   *	    push   eax
+ 0000021D  E8 FFFFFDFC	   *	    call   PrintChar
+					INVOKE PrintChar, CharSpace
+ 00000222  A0 0000029E R   *	    mov    al, CharSpace
+ 00000227  50		   *	    push   eax
+ 00000228  E8 FFFFFDF1	   *	    call   PrintChar
+					INVOKE PrintInt, Result
+ 0000022D  FF 35 000002A9 R *	    push   Result
+ 00000233  E8 FFFFFDC8	   *	    call   PrintInt
+ 00000238  E8 00000000 E		CALL Crlf
+ 0000023D  E8 00000000 E		CALL Crlf
+
+ 00000242  BB 00000000			MOV EBX, 0
+ 00000247  8B 0D 00000295 R		MOV ECX, MemIndex
+ 0000024D			DisplayMemory:
+ 0000024D  8B 34 9D			MOV ESI, [CalcMemory + EBX * DWORD]
+	   000000B5 R
+					INVOKE PrintInt, ESI
+ 00000254  56		   *	    push   esi
+ 00000255  E8 FFFFFDA6	   *	    call   PrintInt
+					INVOKE PrintChar, CharSpace
+ 0000025A  A0 0000029E R   *	    mov    al, CharSpace
+ 0000025F  50		   *	    push   eax
+ 00000260  E8 FFFFFDB9	   *	    call   PrintChar
+
+ 00000265  43				INC EBX
+ 00000266  E2 E5			LOOP DisplayMemory
+
+ 00000268  E8 00000000 E		CALL Crlf
+
+					; Begin another calculation
+ 0000026D  E9 FFFFFE61			JMP ProgramStart
 
 					exit
- 000000A5  6A 00	   *	    push   +000000000h
- 000000A7  E8 00000000 E   *	    call   ExitProcess
- 000000AC			main ENDP
+ 00000272  6A 00	   *	    push   +000000000h
+ 00000274  E8 00000000 E   *	    call   ExitProcess
+ 00000279			main ENDP
 				END main
-Microsoft (R) Macro Assembler Version 14.40.33813.0	    08/08/24 12:49:22
+Microsoft (R) Macro Assembler Version 14.40.33813.0	    08/11/24 02:55:03
 1Add and Subtract, Version 2         (AddSub2.asm	     Symbols 2 - 1
 
 
@@ -281,16 +534,17 @@ Segments and Groups:
 
 FLAT . . . . . . . . . . . . . .	GROUP
 STACK  . . . . . . . . . . . . .	32 Bit	 00001000 Para	  Stack	  'STACK'	 
-_DATA  . . . . . . . . . . . . .	32 Bit	 00000072 Para	  Public  'DATA'	
-_TEXT  . . . . . . . . . . . . .	32 Bit	 000000AC Para	  Public  'CODE'	
+_DATA  . . . . . . . . . . . . .	32 Bit	 000002AD Para	  Public  'DATA'	
+_TEXT  . . . . . . . . . . . . .	32 Bit	 00000279 Para	  Public  'CODE'	
 
 
 Procedures, parameters, and locals:
 
                 N a m e                 Type     Value    Attr
 
-AddNum . . . . . . . . . . . . .	P Near	 00000000 _TEXT	Length= 0000000A Public STDCALL
-  X  . . . . . . . . . . . . . .	L Near	 00000000 _TEXT	
+AddNum . . . . . . . . . . . . .	P Near	 0000002F _TEXT	Length= 0000001B Public STDCALL
+  AdditionOverflow . . . . . . .	L Near	 0000003C _TEXT	
+  ReturnAddition . . . . . . . .	L Near	 00000046 _TEXT	
 CloseFile  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 CloseHandle  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 Clrscr . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
@@ -298,10 +552,20 @@ CreateFileA  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External
 CreateOutputFile . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 Crlf . . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 Delay  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
-DivideNum  . . . . . . . . . . .	P Near	 00000012 _TEXT	Length= 00000000 Public STDCALL
+DivideNum  . . . . . . . . . . .	P Near	 00000088 _TEXT	Length= 00000024 Public STDCALL
+  X  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  Y  . . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  ZeroDivision . . . . . . . . .	L Near	 0000009A _TEXT	
+  ReturnSubtraction  . . . . . .	L Near	 000000A8 _TEXT	
 DumpMem  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 DumpRegs . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 ExitProcess  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ExponentNum  . . . . . . . . . .	P Near	 000000AC _TEXT	Length= 00000027 Public STDCALL
+  X  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  Y  . . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  LoopExp  . . . . . . . . . . .	L Near	 000000B7 _TEXT	
+  ExponentOverflow . . . . . . .	L Near	 000000C1 _TEXT	
+  ReturnExponent . . . . . . . .	L Near	 000000CF _TEXT	
 FileTimeToDosDateTime  . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 FileTimeToSystemTime . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 FlushConsoleInputBuffer  . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
@@ -336,11 +600,22 @@ LocalFree  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External
 MessageBoxA  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 MsgBoxAsk  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 MsgBox . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
-MultiplyNum  . . . . . . . . . .	P Near	 0000000E _TEXT	Length= 00000004 Public STDCALL
+MultiplyNum  . . . . . . . . . .	P Near	 00000067 _TEXT	Length= 00000021 Public STDCALL
+  X  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  Y  . . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  MultiplicationOverflow . . . .	L Near	 00000076 _TEXT	
+  ReturnMultiplication . . . . .	L Near	 00000084 _TEXT	
 OpenInputFile  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 ParseDecimal32 . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 ParseInteger32 . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 PeekConsoleInputA  . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+PrintChar  . . . . . . . . . . .	P Near	 0000001E _TEXT	Length= 00000011 Public STDCALL
+  X  . . . . . . . . . . . . . .	Byte	 bp + 00000008
+PrintInt . . . . . . . . . . . .	P Near	 00000000 _TEXT	Length= 0000001E Public STDCALL
+  X  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  PrintUnsigned  . . . . . . . .	L Near	 0000000D _TEXT	
+  PrintSigned  . . . . . . . . .	L Near	 00000014 _TEXT	
+  EndPrint . . . . . . . . . . .	L Near	 00000019 _TEXT	
 Random32 . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 RandomRange  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 Randomize  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
@@ -374,8 +649,11 @@ Str_copy . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External
 Str_length . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 Str_trim . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 Str_ucase  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
-SubtractNum  . . . . . . . . . .	P Near	 0000000A _TEXT	Length= 00000004 Public STDCALL
-  X  . . . . . . . . . . . . . .	L Near	 0000000A _TEXT	
+SubtractNum  . . . . . . . . . .	P Near	 0000004A _TEXT	Length= 0000001D Public STDCALL
+  X  . . . . . . . . . . . . . .	DWord	 bp + 00000008
+  Y  . . . . . . . . . . . . . .	DWord	 bp + 0000000C
+  SubtractionOverflow  . . . . .	L Near	 00000057 _TEXT	
+  ReturnSubtraction  . . . . . .	L Near	 00000061 _TEXT	
 SystemTimeToFileTime . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 WaitMsg  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 WriteBinB  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
@@ -395,13 +673,15 @@ WriteStackFrame  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External
 WriteString  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 WriteToFile  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 WriteWindowsMsg  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
-main . . . . . . . . . . . . . .	P Near	 00000012 _TEXT	Length= 0000009A Public STDCALL
-  SelectedAddition . . . . . . .	L Near	 0000007D _TEXT	
-  SelectedSubtraction  . . . . .	L Near	 00000090 _TEXT	
-  SelectedMultiplication . . . .	L Near	 00000097 _TEXT	
-  SelectedDivision . . . . . . .	L Near	 0000009E _TEXT	
-  SelectedExponent . . . . . . .	L Near	 000000A5 _TEXT	
-  EndSelected  . . . . . . . . .	L Near	 000000A5 _TEXT	
+main . . . . . . . . . . . . . .	P Near	 000000D3 _TEXT	Length= 000001A6 Public STDCALL
+  ProgramStart . . . . . . . . .	L Near	 000000D3 _TEXT	
+  SelectedAddition . . . . . . .	L Near	 0000015F _TEXT	
+  SelectedSubtraction  . . . . .	L Near	 00000172 _TEXT	
+  SelectedMultiplication . . . .	L Near	 00000185 _TEXT	
+  SelectedDivision . . . . . . .	L Near	 00000198 _TEXT	
+  SelectedExponent . . . . . . .	L Near	 000001AB _TEXT	
+  EndSelected  . . . . . . . . .	L Near	 000001BC _TEXT	
+  DisplayMemory  . . . . . . . .	L Near	 0000024D _TEXT	
 printf . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
 scanf  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
 wsprintfA  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
@@ -425,8 +705,12 @@ CAPSLOCK_ON  . . . . . . . . . .	Number	 00000080h
 CREATE_ALWAYS  . . . . . . . . .	Number	 00000002h   
 CREATE_NEW . . . . . . . . . . .	Number	 00000001h   
 CTRL_MASK  . . . . . . . . . . .	Number	 0000000Ch   
+CalcMemory . . . . . . . . . . .	DWord	 000000B5 _DATA	
+CharEqual  . . . . . . . . . . .	Byte	 0000029F _DATA	
+CharSpace  . . . . . . . . . . .	Byte	 0000029E _DATA	
 CreateFile . . . . . . . . . . .	Text   	 CreateFileA
 DO_NOT_SHARE . . . . . . . . . .	Number	 00000000h   
+DivideZeroError  . . . . . . . .	Byte	 00000084 _DATA	
 ENABLE_ECHO_INPUT  . . . . . . .	Number	 00000004h   
 ENABLE_LINE_INPUT  . . . . . . .	Number	 00000002h   
 ENABLE_MOUSE_INPUT . . . . . . .	Number	 00000010h   
@@ -517,22 +801,26 @@ MB_TASKMODAL . . . . . . . . . .	Number	 00002000h
 MB_USERICON  . . . . . . . . . .	Number	 00000080h   
 MB_YESNOCANCEL . . . . . . . . .	Number	 00000003h   
 MB_YESNO . . . . . . . . . . . .	Number	 00000004h   
+MEMORY_LENGTH  . . . . . . . . .	Number	 00000078h   
 MENU_EVENT . . . . . . . . . . .	Number	 00000008h   
 MOUSE_EVENT  . . . . . . . . . .	Number	 00000002h   
+MemIndex . . . . . . . . . . . .	DWord	 00000295 _DATA	
 MessageBox . . . . . . . . . . .	Text   	 MessageBoxA
 NULL . . . . . . . . . . . . . .	Number	 00000000h   
 NUMLOCK_ON . . . . . . . . . . .	Number	 00000020h   
-NUMTwo . . . . . . . . . . . . .	DWord	 0000006E _DATA	
+NUMTwo . . . . . . . . . . . . .	DWord	 000002A5 _DATA	
 NewLine  . . . . . . . . . . . .	Byte	 00000000 _DATA	
-NumOne . . . . . . . . . . . . .	DWord	 0000006A _DATA	
+NumOne . . . . . . . . . . . . .	DWord	 000002A1 _DATA	
 OPEN_ALWAYS  . . . . . . . . . .	Number	 00000004h   
 OPEN_EXISTING  . . . . . . . . .	Number	 00000003h   
-OpAddition . . . . . . . . . . .	Byte	 00000064 _DATA	
-OpDivision . . . . . . . . . . .	Byte	 00000067 _DATA	
-OpExponent . . . . . . . . . . .	Byte	 00000068 _DATA	
-OpMultiplication . . . . . . . .	Byte	 00000066 _DATA	
-OpSubtraction  . . . . . . . . .	Byte	 00000065 _DATA	
-Operation  . . . . . . . . . . .	Byte	 00000069 _DATA	
+OpAddition . . . . . . . . . . .	Byte	 00000299 _DATA	
+OpDivision . . . . . . . . . . .	Byte	 0000029C _DATA	
+OpExponent . . . . . . . . . . .	Byte	 0000029D _DATA	
+OpMultiplication . . . . . . . .	Byte	 0000029B _DATA	
+OpSubtraction  . . . . . . . . .	Byte	 0000029A _DATA	
+OperationInvalidError  . . . . .	Byte	 00000064 _DATA	
+Operation  . . . . . . . . . . .	Byte	 000002A0 _DATA	
+OverflowError  . . . . . . . . .	Byte	 0000009F _DATA	
 PeekConsoleInput . . . . . . . .	Text   	 PeekConsoleInputA
 PromptNumOne . . . . . . . . . .	Byte	 00000039 _DATA	
 PromptNumTwo . . . . . . . . . .	Byte	 0000004E _DATA	
@@ -541,6 +829,7 @@ RIGHT_ALT_PRESSED  . . . . . . .	Number	 00000001h
 RIGHT_CTRL_PRESSED . . . . . . .	Number	 00000004h   
 ReadConsoleInput . . . . . . . .	Text   	 ReadConsoleInputA
 ReadConsole  . . . . . . . . . .	Text   	 ReadConsoleA
+Result . . . . . . . . . . . . .	DWord	 000002A9 _DATA	
 SCROLLLOCK_ON  . . . . . . . . .	Number	 00000040h   
 SHIFT_MASK . . . . . . . . . . .	Number	 00000010h   
 SHIFT_PRESSED  . . . . . . . . .	Number	 00000010h   
@@ -652,4 +941,4 @@ wsprintf . . . . . . . . . . . .	Text   	 wsprintfA
 yellow . . . . . . . . . . . . .	Number	 0000000Eh   
 
 	   0 Warnings
-	   6 Errors
+	   0 Errors
